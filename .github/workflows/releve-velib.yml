@@ -1,0 +1,41 @@
+name: Relevé Vélib'
+
+on:
+  schedule:
+    # Toutes les 10 minutes (GitHub peut décaler de quelques minutes aux heures chargées)
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}   # bouton « Run workflow » pour lancer à la main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: releve-velib
+  cancel-in-progress: false
+
+jobs:
+  releve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Relever l'état des stations
+        run: python3 velib/velib_collecteur.py --une-fois --csv velib/data
+
+      - name: Enregistrer dans le dépôt
+        run: |
+          git config user.name "releve-velib"
+          git config user.email "actions@users.noreply.github.com"
+          git add velib/data
+          if git diff --cached --quiet; then
+            echo "Rien de nouveau."
+          else
+            git commit -m "Relevé $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull --rebase --quiet
+            git push
+          fi
